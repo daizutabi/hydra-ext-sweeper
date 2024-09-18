@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hydra-ext-sweeper"
-version = "0.1.0"
+version = "0.1.1"
 description = "A hydra sweeper with extended syntax for efficient parameter sweeping"
 readme = "README.md"
 license = "MIT"
@@ -35,7 +35,7 @@ Issues = "https://github.com/daizutabi/hydra-ext-sweeper/issues"
 exclude = ["/.github", "/docs"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/hydra_ext_sweeper"]
+packages = ["src/hydra_plugins"]
 
 [tool.pytest.ini_options]
 addopts = [
@@ -50,4 +50,8 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["ALL"]
+ignore = ["D"]
 unfixable = ["F401", "RUF100"]
+
+[tool.ruff.lint.extend-per-file-ignores]
+"**/{tests}/*" = ["D", "S", "ERA", "PLR"]
