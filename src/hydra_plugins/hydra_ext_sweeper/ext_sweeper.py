@@ -1,4 +1,5 @@
 import logging
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -73,8 +74,9 @@ class ExtSweeper(BasicSweeper):
     @staticmethod
     def is_number(cfg: DictConfig, key: str) -> bool:
         for key_ in key.split("."):
-            if key_ not in cfg:
+            if not isinstance(cfg, DictConfig) or key_ not in cfg:
                 return False
+
             cfg = cfg[key_]
 
         return isinstance(cfg, int | float)
