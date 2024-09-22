@@ -1,24 +1,15 @@
 import logging
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
-from pathlib import Path
+from collections.abc import Sequence
+from dataclasses import dataclass
 
 from hydra._internal.core_plugins.basic_sweeper import BasicSweeper, BasicSweeperConf
 from hydra.core.config_store import ConfigStore
-from hydra.core.hydra_config import HydraConfig
 from hydra.core.override_parser.overrides_parser import OverridesParser
-from hydra.core.override_parser.types import (
-    ChoiceSweep,
-    Override,
-    OverrideType,
-    ValueType,
-)
-from hydra.core.plugins import Plugins
+from hydra.core.override_parser.types import Override, OverrideType, ValueType
 from hydra.core.utils import JobReturn
-from hydra.plugins.launcher import Launcher
-from hydra.plugins.sweeper import Sweeper
-from hydra.types import HydraContext, TaskFunction
-from omegaconf import DictConfig, OmegaConf
+from hydra.errors import ConfigCompositionException
+from hydra.types import RunMode
+from omegaconf import DictConfig
 
 log = logging.getLogger(__name__)
 
@@ -41,30 +32,49 @@ log = logging.getLogger(__name__)
 class ExtSweeper(BasicSweeper):
     """A hydra sweeper with extended syntax for efficient parameter sweeping."""
 
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}()"
-
     def sweep(self, arguments: list[str]) -> list[Sequence[JobReturn]]:
-        # log.info("RangeSweeper sweeping")
-        # log.info(f"Sweep output dir : {self.config.hydra.sweep.dir}")
-        return super().sweep(arguments)
+        from ._parser import parse
 
-    #     src_lists = []
-    #     for s in arguments:
-    #         key, value = s.split("=")
-    #         gl = re.match(r"glob\((.+)\)", value)
-    #         if "," in value:
-    #             possible_values = value.split(",")
-    #         elif ":" in value:
-    #             possible_values = range(*[int(v) for v in value.split(":")])
-    #         elif gl:
-    #             possible_values = list(glob.glob(gl[1], recursive=True))
-    #         else:
-    #             possible_values = [value]
-    #         src_lists.append([f"{key}={val}"
-    #                          for val in possible_values])
+        assert self.config is not None
+        assert self.hydra_context is not None
 
-    #     batch = list(itertools.product(*src_lists))
+        config_loader = self.hydra_context.config_loader
 
-    #     returns = [self.launcher.launch(batch)]
-    #     return returns
+        try:
+            config = config_loader.load_configuration(
+                config_name=self.config.hydra.job.config_name,
+                overrides=[],
+                run_mode=RunMode.RUN,
+            )
+        except ConfigCompositionException:
+            return super().sweep(arguments)
+
+        parser = OverridesParser.create(config_loader)
+
+        parsed = []
+        for argument in arguments:
+            override = parser.parse_override(argument)
+            key = override.get_key_element()
+
+            if self.is_extended(override) and self.is_number(config, key):
+                value = parse(override.get_value_string())
+                parsed.append(f"{key}={value}")
+            else:
+                parsed.append(argument)
+
+        return super().sweep(parsed)
+
+    @staticmethod
+    def is_extended(override: Override) -> bool:
+        is_change = override.type is OverrideType.CHANGE
+        is_element = override.value_type is ValueType.ELEMENT
+        return is_change and is_element
+
+    @staticmethod
+    def is_number(cfg: DictConfig, key: str) -> bool:
+        for key_ in key.split("."):
+            if key_ not in cfg:
+                return False
+            cfg = cfg[key_]
+
+        return isinstance(cfg, int | float)

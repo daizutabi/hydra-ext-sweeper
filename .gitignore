@@ -1,3 +1,5 @@
-__pycache__/
+.coverage
 .venv/
+__pycache__/
+lcov.info
 uv.lock
